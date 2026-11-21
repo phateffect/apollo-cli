@@ -12,7 +12,7 @@ description: 使用 apollo CLI 安全操作 Apollo 配置中心：检查登录�
 - 不读取或输出 Cookie、token、密码等凭据。
 - 登录时让用户通过隐藏提示输入密码；不要接收、保存或传递密码。
 - 配置可能包含密码、密钥、token 或内部地址。只读取和展示完成任务所需的最少内容，不要把真实秘密写进工具调用、回复、持久化内容或日志。
-- 如果写入内容包含秘密，不要代用户执行；给出使用占位符的命令，让用户在受控终端完成。
+- 如果敏感值已经保存在受保护的 UTF-8 文件中，使用 `--set-file` 或 `--update-file`，不要读取或展示文件内容。否则给出使用占位符的命令，让用户在受控终端完成。
 - 修改和发布都是外部写操作，且授权彼此独立。“修改配置”不等于“发布配置”。
 - 写入结果不明确时先重新读取，绝不盲目重试。
 
@@ -82,6 +82,9 @@ apollo app app_id env cluster namespace --json
 
 ```sh
 apollo app app_id env cluster namespace --set key value
+
+# value 含敏感信息时从受保护文件读取
+apollo app app_id env cluster namespace --set-file key /secure/value.txt
 ```
 
 - key 存在时更新，不存在时创建。
@@ -98,6 +101,9 @@ apollo app app_id env cluster namespace --delete key
 
 ```sh
 apollo app app_id env cluster namespace --update content
+
+# 完整内容含敏感信息时从受保护文件读取
+apollo app app_id env cluster namespace --update-file /secure/namespace.txt
 ```
 
 - 仅对 `properties` 和 `json` 使用全量更新。
@@ -127,6 +133,7 @@ apollo app app_id env cluster namespace \
 ## 确认与结果处理
 
 - 默认保留交互确认，让用户核对目标和操作类型。
+- 写入预览默认隐藏配置值；不要为了查看敏感内容添加 `--show-values`。
 - 只有用户已明确授权同一目标、最终内容和操作类型，且内容不敏感时，才在非交互执行中添加 `--yes`。
 - 用户取消操作时，不要报告为失败或完成。
 - 写入返回成功后仍要重新读取并核对；结果不一致时说明配置可能已经发生变化，并停止重试。

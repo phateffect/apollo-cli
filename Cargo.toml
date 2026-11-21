@@ -1,0 +1,27 @@
+[package]
+name = "apollo"
+version = "0.1.0"
+edition = "2024"
+description = "A command-line client for Apollo configuration centers"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive"] }
+clap_usage = "5"
+directories = "6"
+minijinja = { version = "3", features = ["json", "serde"] }
+reqwest = { version = "0.13", default-features = false, features = ["form", "json", "query", "rustls"] }
+rpassword = "7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+url = "2"
+zeroize = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+wiremock = "0.6"
