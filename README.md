@@ -156,11 +156,12 @@ usage generate completion bash apollo --file apollo.usage.kdl
 
 ## 自动发布
 
-推送 `YYYY.MM.DD` 格式的 tag 时，GitHub Actions 会自动同步 Cargo package version、验证项目并发布三个平台的二进制：
+推送 `YYYY.MM.DD` 格式的 tag 时，GitHub Actions 会自动同步 Cargo package version、验证项目并发布以下二进制：
 
 - Linux x86_64：`.tar.gz`
 - Windows x86_64：`.zip`
 - macOS x86_64：`.tar.gz`
+- macOS Apple Silicon（aarch64）：`.tar.gz`
 
 例如：
 
