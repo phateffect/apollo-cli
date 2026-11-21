@@ -128,7 +128,7 @@ apollo app APP_ID DEV default application --delete dsn --yes
 
 `--set`、`--set-file` 和 `--delete` 仅支持 properties。`--update`、`--update-file` 支持 properties 和 json；properties 原样发送，JSON 在发送前解析并格式化。文件输入按 UTF-8 原样读取。所有配置写操作都会重新读取目标 Namespace 并核对结果，异常时不自动重试。
 
-写操作的确认预览、取消结果和完成结果均使用 frontmatter 展示目标、操作类型及 `result`。配置值默认显示为 `redacted`；全量更新会展示更新前后的字节数。仅在内容不敏感且确实需要时使用 `--show-values` 显示值。
+写操作的确认预览、取消结果和完成结果均使用 frontmatter 展示目标、操作类型及 `result`。配置值默认显示为 `redacted`；仅在内容不敏感且确实需要时使用 `--show-values` 显示字符串形式的 `oldValue` 和 `newValue`。
 
 ## 发布 Namespace
 

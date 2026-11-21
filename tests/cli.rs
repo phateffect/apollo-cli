@@ -1036,8 +1036,6 @@ async fn namespace_update_replaces_properties_text() {
     assert!(stdout(&output).contains("result: updated"));
     assert!(stderr(&output).contains("operation: update"));
     assert!(stderr(&output).contains("format: properties"));
-    assert!(stderr(&output).contains("oldBytes:"));
-    assert!(stderr(&output).contains("newBytes:"));
     assert!(stderr(&output).contains("values: redacted"));
     server.verify().await;
 }
@@ -1127,6 +1125,7 @@ async fn namespace_update_formats_json_before_replacing() {
             "jkws.json",
             "--update",
             "{\"name\":\"模块\",\"X\":\"Y\"}",
+            "--show-values",
             "--yes",
         ])
         .output()
@@ -1134,6 +1133,8 @@ async fn namespace_update_formats_json_before_replacing() {
     assert_success(&output);
     assert!(stdout(&output).contains("result: updated"));
     assert!(stderr(&output).contains("format: json"));
+    assert!(stderr(&output).contains(r#"oldValue: "{\n  \"old\": true\n}\n""#));
+    assert!(stderr(&output).contains(r#"newValue: "{\n  \"X\": \"Y\""#));
     server.verify().await;
 }
 

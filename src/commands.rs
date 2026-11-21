@@ -131,10 +131,8 @@ struct NamespaceUpdateOutput<'a> {
     operation: &'a str,
     format: &'a str,
     show_values: bool,
-    old_content: Option<&'a str>,
-    new_content: Option<&'a str>,
-    old_bytes: usize,
-    new_bytes: usize,
+    old_value: Option<&'a str>,
+    new_value: Option<&'a str>,
     result: Option<String>,
 }
 
@@ -428,10 +426,8 @@ async fn update_namespace(client: &ApolloClient, arguments: &AppArgs, content: &
         operation: "update",
         format,
         show_values: arguments.show_values,
-        old_content: arguments.show_values.then_some(old_content.as_str()),
-        new_content: arguments.show_values.then_some(normalized.as_str()),
-        old_bytes: old_content.len(),
-        new_bytes: normalized.len(),
+        old_value: arguments.show_values.then_some(old_content.as_str()),
+        new_value: arguments.show_values.then_some(normalized.as_str()),
         result: None,
     };
     output::namespace_update_preview(&view)?;
