@@ -3,6 +3,9 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+#[cfg(unix)]
+use directories::BaseDirs;
+#[cfg(not(unix))]
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
@@ -53,9 +56,7 @@ impl ConfigStore {
             }
             return Ok(Self::at(root));
         }
-        let directories = ProjectDirs::from("", "", "apollo")
-            .context("could not determine the user configuration directory")?;
-        Ok(Self::at(directories.config_dir()))
+        Ok(Self::at(default_config_root()?))
     }
 
     pub fn at(root: impl Into<PathBuf>) -> Self {
@@ -106,6 +107,25 @@ impl ConfigStore {
 }
 
 #[cfg(unix)]
+fn default_config_root() -> Result<PathBuf> {
+    let directories =
+        BaseDirs::new().context("could not determine the user configuration directory")?;
+    Ok(unix_config_root(directories.home_dir()))
+}
+
+#[cfg(unix)]
+fn unix_config_root(home: &Path) -> PathBuf {
+    home.join(".config").join("apollo")
+}
+
+#[cfg(not(unix))]
+fn default_config_root() -> Result<PathBuf> {
+    let directories = ProjectDirs::from("", "", "apollo")
+        .context("could not determine the user configuration directory")?;
+    Ok(directories.config_dir().to_owned())
+}
+
+#[cfg(unix)]
 fn restrict_file(file: &fs::File) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
@@ -142,4 +162,21 @@ fn restrict_path(path: &Path) -> Result<()> {
 #[cfg(not(unix))]
 fn restrict_path(_path: &Path) -> Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    use super::unix_config_root;
+    #[cfg(unix)]
+    use std::path::Path;
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_config_is_stored_under_dot_config() {
+        assert_eq!(
+            unix_config_root(Path::new("/home/alice")),
+            Path::new("/home/alice/.config/apollo")
+        );
+    }
 }

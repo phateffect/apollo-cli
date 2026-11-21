@@ -31,6 +31,8 @@ apollo login --url "$APOLLO_URL" --username "$APOLLO_USERNAME"
 
 登录成功后会安全保存登录状态；用户名和密码不会写入配置。
 
+macOS 和 Linux 默认保存到 `~/.config/apollo/session.json`；Windows 默认保存到 `%APPDATA%\apollo\config\session.json`。
+
 可通过 `APOLLO_CONFIG_DIR` 指定另一个配置目录，例如隔离测试环境：
 
 ```sh
