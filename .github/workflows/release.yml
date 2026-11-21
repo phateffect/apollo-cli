@@ -27,10 +27,12 @@ jobs:
             exit 1
           fi
 
-          if [[ "$(date -u -d "$VERSION" +%Y.%m.%d 2>/dev/null)" != "$VERSION" ]]; then
-            echo "Invalid release date: $VERSION" >&2
-            exit 1
-          fi
+          python - <<'PY'
+          import datetime
+          import os
+
+          datetime.datetime.strptime(os.environ["VERSION"], "%Y.%m.%d")
+          PY
 
       - name: Check out repository
         uses: actions/checkout@v7
