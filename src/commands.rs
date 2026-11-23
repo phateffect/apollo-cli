@@ -73,7 +73,7 @@ async fn direct(arguments: Vec<OsString>) -> Result<()> {
 async fn login(arguments: LoginArgs) -> Result<()> {
     let url = match arguments.url {
         Some(url) => url,
-        None => prompt::required("Apollo URL")?,
+        None => login_url()?,
     };
     let client = ApolloClient::new(&url)?;
     let username = match arguments.username {
@@ -96,6 +96,24 @@ async fn login(arguments: LoginArgs) -> Result<()> {
         logged_in: true,
         username: Some(&server_username),
     })
+}
+
+/// Resolves the Apollo URL for `login`, offering the previously saved URL first.
+fn login_url() -> Result<String> {
+    let previous = ConfigStore::discover()?
+        .load()?
+        .map(|config| config.url)
+        .filter(|url| !url.is_empty());
+    match previous {
+        Some(url) => {
+            if prompt::confirm(&format!("Use last URL {url}?"))? {
+                Ok(url)
+            } else {
+                prompt::required("Apollo URL")
+            }
+        }
+        None => prompt::required("Apollo URL"),
+    }
 }
 
 #[derive(Serialize)]

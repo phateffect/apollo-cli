@@ -283,6 +283,99 @@ async fn login_prompts_for_all_missing_values_and_status_reads_user() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn relogin_can_reuse_the_saved_url() {
+    let server = MockServer::start().await;
+    let config_dir = TempDir::new().unwrap();
+    configure(config_dir.path(), &server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/signin"))
+        .and(SigninFormMatcher)
+        .respond_with(
+            ResponseTemplate::new(302)
+                .insert_header("Location", "/")
+                .insert_header(
+                    "Set-Cookie",
+                    "JSESSIONID=fresh-session-token; Path=/; HttpOnly",
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/user"))
+        .and(header("cookie", "JSESSIONID=fresh-session-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "userId": "cli-test-user"
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let login = apollo(config_dir.path())
+        .arg("login")
+        .write_stdin("y\ncli-test-user\ncli-test-password\n")
+        .output()
+        .unwrap();
+    assert_success(&login);
+    assert!(stdout(&login).contains("loggedIn: true"));
+    assert!(stderr(&login).contains(&format!("Use last URL {}?", server.uri())));
+
+    let status = apollo(config_dir.path())
+        .args(["status", "--json"])
+        .output()
+        .unwrap();
+    assert_success(&status);
+    let status: Value = serde_json::from_slice(&status.stdout).unwrap();
+    assert_eq!(status["url"], server.uri());
+    server.verify().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn relogin_asking_for_a_new_url_replaces_the_saved_one() {
+    let old_server = MockServer::start().await;
+    let server = MockServer::start().await;
+    let config_dir = TempDir::new().unwrap();
+    configure(config_dir.path(), &old_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/signin"))
+        .and(SigninFormMatcher)
+        .respond_with(
+            ResponseTemplate::new(302)
+                .insert_header("Location", "/")
+                .insert_header(
+                    "Set-Cookie",
+                    "JSESSIONID=fresh-session-token; Path=/; HttpOnly",
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/user"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "userId": "cli-test-user"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let input = format!("n\n{}\ncli-test-user\ncli-test-password\n", server.uri());
+    let login = apollo(config_dir.path())
+        .arg("login")
+        .write_stdin(input)
+        .output()
+        .unwrap();
+    assert_success(&login);
+    assert!(stdout(&login).contains("loggedIn: true"));
+
+    let saved = ConfigStore::at(config_dir.path()).load().unwrap().unwrap();
+    assert_eq!(saved.url, server.uri());
+    server.verify().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn rejected_login_does_not_save_credentials() {
     let server = MockServer::start().await;
     let config_dir = TempDir::new().unwrap();
