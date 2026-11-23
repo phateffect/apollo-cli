@@ -3,7 +3,7 @@ name: Release
 "on":
   push:
     tags:
-      - '[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]'
+      - '[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9](-[0-9]+)?'
 
 concurrency:
   group: release-${{ github.ref }}
@@ -22,7 +22,7 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          if [[ ! "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]]; then
+          if [[ ! "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]]; then
             echo "Invalid release tag: $VERSION" >&2
             exit 1
           fi
@@ -31,7 +31,8 @@ jobs:
           import datetime
           import os
 
-          datetime.datetime.strptime(os.environ["VERSION"], "%Y.%m.%d")
+          date_part = os.environ["VERSION"].split("-")[0]
+          datetime.datetime.strptime(date_part, "%Y.%m.%d")
           PY
 
       - name: Check out repository
