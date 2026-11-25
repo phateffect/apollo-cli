@@ -4,6 +4,7 @@ use std::io::{self, Write};
 
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::cli::{AppArgs, Cli, Command, KeyValue, LoginArgs, SearchArgs};
 use crate::client::ApolloClient;
@@ -122,6 +123,22 @@ struct StatusOutput<'a> {
     url: Option<&'a str>,
     logged_in: bool,
     username: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NamespaceContentOutput<'a> {
+    app: &'a str,
+    env: &'a str,
+    cluster: &'a str,
+    namespace: &'a str,
+    format: &'a str,
+    /// Parsed JSON object; present only for JSON namespaces whose content is an object.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<Value>,
+    /// Plain text; present whenever `content` is absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_content: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -333,17 +350,32 @@ async fn list_items(
         .iter()
         .find(|candidate| candidate.base_info.namespace_name == namespace)
         .with_context(|| format!("namespace `{namespace}` was not found"))?;
+    let format = namespace.format.as_deref().unwrap_or_default();
+    if arguments.json {
+        let (content, raw_content) = match crate::render::namespace_content_value(namespace)? {
+            crate::render::NamespaceContent::Object(value) => (Some(value), None),
+            crate::render::NamespaceContent::Text(text) => (None, Some(text)),
+        };
+        return output::json(&NamespaceContentOutput {
+            app: &arguments.app_id,
+            env,
+            cluster,
+            namespace: &namespace.base_info.namespace_name,
+            format,
+            content,
+            raw_content,
+        });
+    }
     let view = ContentOutput {
         app: &arguments.app_id,
         env,
         cluster,
         namespace: &namespace.base_info.namespace_name,
+        format: format.to_owned(),
         content: crate::render::namespace_content(namespace)?,
     };
-    if arguments.json {
-        output::json(&view)
-    } else if arguments.meta {
-        output::namespace(&view, namespace.format.as_deref().unwrap_or_default())
+    if arguments.meta {
+        output::namespace(&view)
     } else {
         output::raw_namespace(&view)
     }

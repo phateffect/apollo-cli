@@ -613,16 +613,100 @@ async fn app_lists_namespaces_and_reads_one_by_its_full_name() {
         .unwrap();
     assert_success(&explicit_json);
     let output: Value = serde_json::from_slice(&explicit_json.stdout).unwrap();
-    assert_eq!(output.as_object().unwrap().len(), 5);
-    assert_eq!(output["app"], "sample-app");
-    assert_eq!(output["env"], "DEV");
-    assert_eq!(output["cluster"], "default");
-    assert_eq!(output["namespace"], "jkws.json");
-    let content = output["content"].as_str().unwrap();
-    assert!(content.ends_with('\n'));
-    let content: Value = serde_json::from_str(content).unwrap();
-    assert_eq!(content, json!({"enabled": true, "name": "模块"}));
+    assert_eq!(
+        output,
+        json!({
+            "app": "sample-app",
+            "env": "DEV",
+            "cluster": "default",
+            "namespace": "jkws.json",
+            "format": "json",
+            "content": {"enabled": true, "name": "模块"}
+        })
+    );
     assert!(!stdout(&explicit_json).contains("\\u"));
+    server.verify().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn namespace_json_output_falls_back_to_raw_content_for_non_object_json() {
+    let server = MockServer::start().await;
+    let config_dir = TempDir::new().unwrap();
+    configure(config_dir.path(), &server.uri());
+    let mut without_content_item = namespace_body_with_json_content("{not json");
+    without_content_item[1]["items"][0]["item"]["key"] = json!("config");
+    without_content_item[1]["items"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "item": {
+                "id": 51038, "namespaceId": 8589, "key": "other", "value": "x",
+                "comment": null, "lineNum": 2, "type": 0
+            }
+        }));
+    Mock::given(method("GET"))
+        .and(path(
+            "/apps/sample-app/envs/DEV/clusters/default/namespaces",
+        ))
+        .respond_with(SequenceResponder {
+            responses: Mutex::new(VecDeque::from([
+                ResponseTemplate::new(200)
+                    .set_body_json(namespace_body_with_json_content("[1, 2]")),
+                ResponseTemplate::new(200)
+                    .set_body_json(namespace_body_with_json_content("{not json")),
+                ResponseTemplate::new(200)
+                    .set_body_json(namespace_body_with_json_content("{not json")),
+                ResponseTemplate::new(200).set_body_json(without_content_item),
+            ])),
+        })
+        .expect(4)
+        .mount(&server)
+        .await;
+
+    // A JSON array is valid JSON but not an object, so the stored string is returned as-is.
+    let array = apollo(config_dir.path())
+        .args(["app", "sample-app", "DEV", "default", "jkws.json", "--json"])
+        .output()
+        .unwrap();
+    assert_success(&array);
+    let output: Value = serde_json::from_slice(&array.stdout).unwrap();
+    assert_eq!(
+        output,
+        json!({
+            "app": "sample-app",
+            "env": "DEV",
+            "cluster": "default",
+            "namespace": "jkws.json",
+            "format": "json",
+            "rawContent": "[1, 2]"
+        })
+    );
+
+    // Invalid JSON is not an error for `--json`; the stored string is returned as-is.
+    let invalid = apollo(config_dir.path())
+        .args(["app", "sample-app", "DEV", "default", "jkws.json", "--json"])
+        .output()
+        .unwrap();
+    assert_success(&invalid);
+    let output: Value = serde_json::from_slice(&invalid.stdout).unwrap();
+    assert_eq!(output["rawContent"], "{not json");
+    assert!(output.get("content").is_none());
+
+    // The default output keeps rejecting invalid JSON.
+    let raw = apollo(config_dir.path())
+        .args(["app", "sample-app", "DEV", "default", "jkws.json"])
+        .output()
+        .unwrap();
+    assert!(!raw.status.success());
+    assert!(stderr(&raw).contains("contains invalid JSON"));
+
+    // A JSON namespace without an identifiable content item is a structural error.
+    let misplaced = apollo(config_dir.path())
+        .args(["app", "sample-app", "DEV", "default", "jkws.json", "--json"])
+        .output()
+        .unwrap();
+    assert!(!misplaced.status.success());
+    assert!(stderr(&misplaced).contains("must contain a content item"));
     server.verify().await;
 }
 
@@ -707,10 +791,16 @@ async fn properties_namespace_uses_sorted_minijinja_lines() {
         .unwrap();
     assert_success(&json_output);
     let output: Value = serde_json::from_slice(&json_output.stdout).unwrap();
-    assert_eq!(output["namespace"], "application");
     assert_eq!(
-        output["content"],
-        "first = 值\n# standalone\nsecond = two # note \nafter = last\n"
+        output,
+        json!({
+            "app": "sample-app",
+            "env": "DEV",
+            "cluster": "default",
+            "namespace": "application",
+            "format": "properties",
+            "rawContent": "first = 值\n# standalone\nsecond = two # note \nafter = last\n"
+        })
     );
     server.verify().await;
 }
@@ -771,11 +861,74 @@ async fn other_namespace_formats_keep_the_table_output() {
         .unwrap();
     assert_success(&json_output);
     let output: Value = serde_json::from_slice(&json_output.stdout).unwrap();
-    assert_eq!(output["app"], "sample-app");
     assert_eq!(
-        output["content"],
-        "NAMESPACE\tKEY\tVALUE\napplication\tdsn\told\n"
+        output,
+        json!({
+            "app": "sample-app",
+            "env": "DEV",
+            "cluster": "default",
+            "namespace": "application",
+            "format": "yaml",
+            "rawContent": "NAMESPACE\tKEY\tVALUE\napplication\tdsn\told\n"
+        })
     );
+    server.verify().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn namespace_json_output_reports_an_empty_format_when_the_server_omits_it() {
+    let server = MockServer::start().await;
+    let config_dir = TempDir::new().unwrap();
+    configure(config_dir.path(), &server.uri());
+    let mut body = namespace_body("old");
+    body[0].as_object_mut().unwrap().remove("format");
+    Mock::given(method("GET"))
+        .and(path(
+            "/apps/sample-app/envs/DEV/clusters/default/namespaces",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let json_output = apollo(config_dir.path())
+        .args([
+            "app",
+            "sample-app",
+            "DEV",
+            "default",
+            "application",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_success(&json_output);
+    let output: Value = serde_json::from_slice(&json_output.stdout).unwrap();
+    assert_eq!(
+        output,
+        json!({
+            "app": "sample-app",
+            "env": "DEV",
+            "cluster": "default",
+            "namespace": "application",
+            "format": "",
+            "rawContent": "NAMESPACE\tKEY\tVALUE\napplication\tdsn\told\n"
+        })
+    );
+
+    let meta = apollo(config_dir.path())
+        .args([
+            "app",
+            "sample-app",
+            "DEV",
+            "default",
+            "application",
+            "--meta",
+        ])
+        .output()
+        .unwrap();
+    assert_success(&meta);
+    assert!(stdout(&meta).contains("\n```text\n"));
     server.verify().await;
 }
 

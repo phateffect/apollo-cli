@@ -133,5 +133,6 @@ pub struct ContentOutput<'a> {
     pub env: &'a str,
     pub cluster: &'a str,
     pub namespace: &'a str,
+    pub format: String,
     pub content: String,
 }

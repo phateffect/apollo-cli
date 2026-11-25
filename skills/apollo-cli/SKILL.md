@@ -76,6 +76,8 @@ apollo app app_id env cluster --json
 apollo app app_id env cluster namespace --json
 ```
 
+namespace 层级的 `--json` 输出包含 app、env、cluster、namespace、`format`，以及互斥的 `content` / `rawContent` 之一：`format` 为 json 且内容是 JSON 对象时，`content` 直接是对象，无需再解析；其余情况读取 `rawContent` 字符串（json 格式但内容不是合法 JSON 对象时为服务端原文，其他格式为默认纯文本输出）。两者恰好出现一个，用 `if .content then .content else .rawContent end` 取值即可。
+
 ## 修改单个 properties key
 
 先读取目标 namespace，确认其 format 为 `properties`，并检查 key 的当前状态：
