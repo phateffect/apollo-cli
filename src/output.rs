@@ -66,8 +66,8 @@ pub fn raw_namespace(output: &ContentOutput) -> Result<()> {
     write(&output.content)
 }
 
-pub fn namespace(output: &ContentOutput, format: &str) -> Result<()> {
-    write(&render::content_output(output, format)?)
+pub fn namespace(output: &ContentOutput) -> Result<()> {
+    write(&render::content_output(output)?)
 }
 
 fn write(rendered: &str) -> Result<()> {

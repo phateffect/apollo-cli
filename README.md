@@ -82,7 +82,7 @@ apollo app APP_ID DEV default application --meta
 # namespace 使用完整名称，名称中的点不会被拆分
 apollo APP_ID DEV default jwks.json
 
-# 输出包含定位字段和 content 的 JSON
+# 输出包含定位字段、format，以及互斥的 content / rawContent 之一的 JSON
 apollo app APP_ID DEV default application --json
 ```
 
@@ -91,7 +91,10 @@ apollo app APP_ID DEV default application --json
 - app 和 cluster 层级的普通输出适合直接阅读和逐级导航。
 - namespace 层级默认仅输出配置内容。
 - `--meta` 同时输出 app、env、cluster、namespace 等定位信息和配置内容。
-- `--json` 用于程序化处理，包含定位字段和 `content`。
+- `--json` 用于程序化处理，包含定位字段、namespace 的 `format`，以及互斥的 `content` 和 `rawContent` 之一：
+  - `format` 为 json 且内容是合法 JSON 对象时，`content` 为解析后的对象。
+  - 其余情况输出 `rawContent` 字符串：json 格式但内容不是合法 JSON 对象时为服务端原字符串；其他格式为默认纯文本输出的内容。
+  - 服务端未返回 format 时 `format` 为空字符串。
 
 ### namespace 展示格式
 

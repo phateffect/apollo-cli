@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use minijinja::value::Serde;
 use minijinja::{Environment, context};
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::model::{App, AppOutput, ContentOutput, Namespace, NamespacesOutput};
 
@@ -170,10 +171,10 @@ pub fn namespaces(output: &NamespacesOutput) -> Result<String> {
     render_view(NAMESPACES_TEMPLATE, output)
 }
 
-pub fn content_output(output: &ContentOutput, format: &str) -> Result<String> {
-    let language = if format.eq_ignore_ascii_case("json") {
+pub fn content_output(output: &ContentOutput) -> Result<String> {
+    let language = if output.format.eq_ignore_ascii_case("json") {
         "json"
-    } else if format.eq_ignore_ascii_case("properties") {
+    } else if output.format.eq_ignore_ascii_case("properties") {
         "properties"
     } else {
         "text"
@@ -203,12 +204,52 @@ pub fn namespace_content(namespace: &Namespace) -> Result<String> {
     }
 }
 
+/// A namespace's content for machine-readable output: exactly one of the two forms.
+#[derive(Debug)]
+pub enum NamespaceContent {
+    /// A parsed JSON object.
+    Object(Value),
+    /// The stored string of a JSON namespace that is not a JSON object, or the default text
+    /// rendering of every other format.
+    Text(String),
+}
+
+pub fn namespace_content_value(namespace: &Namespace) -> Result<NamespaceContent> {
+    if is_json(namespace) {
+        let stored = json_item(namespace)?;
+        return match serde_json::from_str::<Value>(stored) {
+            Ok(value @ Value::Object(_)) => Ok(NamespaceContent::Object(value)),
+            Ok(_) | Err(_) => Ok(NamespaceContent::Text(stored.to_owned())),
+        };
+    }
+    Ok(NamespaceContent::Text(namespace_content(namespace)?))
+}
+
+fn is_json(namespace: &Namespace) -> bool {
+    namespace
+        .format
+        .as_deref()
+        .is_some_and(|format| format.eq_ignore_ascii_case("json"))
+}
+
 fn render_view<T: Serialize + ?Sized>(template: &str, data: &T) -> Result<String> {
     let rendered = Environment::new().render_str(template, context! { data => Serde(data) })?;
     Ok(format!("{rendered}\n"))
 }
 
 fn json(namespace: &Namespace) -> Result<String> {
+    let stored = json_item(namespace)?;
+    let rendered = format_json(stored).with_context(|| {
+        format!(
+            "namespace `{}` contains invalid JSON",
+            namespace.base_info.namespace_name
+        )
+    })?;
+    Ok(format!("{rendered}\n"))
+}
+
+/// The stored value of a JSON namespace's content item: the item keyed `content`, or the only item.
+fn json_item(namespace: &Namespace) -> Result<&str> {
     let items = namespace
         .items
         .iter()
@@ -230,14 +271,7 @@ fn json(namespace: &Namespace) -> Result<String> {
                 namespace.base_info.namespace_name
             )
         })?;
-    let content = entry.item.value.as_deref().unwrap_or_default();
-    let rendered = format_json(content).with_context(|| {
-        format!(
-            "namespace `{}` contains invalid JSON",
-            namespace.base_info.namespace_name
-        )
-    })?;
-    Ok(format!("{rendered}\n"))
+    Ok(entry.item.value.as_deref().unwrap_or_default())
 }
 
 pub fn format_json(content: &str) -> Result<String> {
